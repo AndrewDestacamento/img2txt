@@ -1,22 +1,24 @@
 import sys
 from PIL import Image
 
+
+OUTPUT_WIDTH = 300
+CHARACTERS = "@OXoxv;:,. "  # Descending characters, Dark text on light background
+# CHARACTERS = " .,:;vxoXO@" # Ascending characters, Light text on dark background
+
+
 def character(percentage):
-    #characters = " .:voO0" # Ascending characters, Light text on dark background
-    characters = "0Oov:. " # Descending characters, Dark text on light background
-    character_list = list(characters)
-    return character_list[int(round(percentage * (len(character_list) - 1)))]
+    return CHARACTERS[int(percentage * len(CHARACTERS))]
+
 
 def luminance(r, g, b):
-    # Conversion to liner sRGB
-    # Repurposed code by Björn Ottosson (https://bottosson.github.io/posts/colorwrong/#what-can-we-do%3F)
+    # Conversion from standard RGB to to linear RGB
+    # Repurposed code by Björn Ottosson (https://bottosson.github.io/posts/colorwrong/#what-can-we-do)
     r, g, b = map(
-        lambda i: i / 3294.6
-        if i < 10.31475
-        else ((40 * i + 561) / 10761) ** 2.4,
+        lambda i: i / 3294.6 if i < 10.31475 else ((40 * i + 561) / 10761) ** 2.4,
         [r, g, b],
     )
-    # Oklab luminance estimate
+    # Conversion from linear RGB to Oklab, just the luminance estimate
     # Oklab by Björn Ottosson (https://bottosson.github.io/posts/oklab/#converting-from-linear-srgb-to-oklab)
     lu = (
         0.2104542553
@@ -35,26 +37,38 @@ with Image.open(sys.argv[1]) as image:
     except FileExistsError:
         while True:
             overwrite = input("File for output_path already exists. Overwrite? [Y/n]: ")
-            if overwrite.lower() == "y":
-                text_file = open(sys.argv[1] + ".txt", "w")
-                break
-            elif overwrite.lower() == "n":
-                exit(
-                    "Declined to overwrite file. Try using a new filename. Exiting now..."
-                )
-            else:
-                print(
-                    "Error: Invalid input in overwrite prompt. Repeating overwrite prompt..."
-                )
+            match overwrite.lower():
+                case "y":
+                    text_file = open(sys.argv[1] + ".txt", "w")
+                    break
+                case "n":
+                    exit(
+                        "Declined to overwrite file. Try using a new filename. Exiting now..."
+                    )
+                case _:
+                    print(
+                        "Error: Invalid input in overwrite prompt. Repeating overwrite prompt..."
+                    )
 
-    resized_image = image.copy().resize(    
-        size=(300, int(round(300/2 * image.height / image.width))),
+    resized_image = image.copy().resize(
+        size=(OUTPUT_WIDTH, int(round(OUTPUT_WIDTH / 2 * image.height / image.width))),
         resample=Image.Resampling.LANCZOS,
     )
 
     for y in range(resized_image.height):
         for x in range(resized_image.width):
-            R, G, B = resized_image.getpixel((x, y))[0:3]
+            pixel_value = resized_image.getpixel((x, y))
+            match resized_image.mode:
+                case "RGB" | "RGBA":
+                    R, G, B = pixel_value[0:3]
+                case "P":
+                    R, G, B = resized_image.getpalette()[
+                        3 * pixel_value : 3 * (pixel_value + 1)
+                    ]
+                case "L" | "1":
+                    R, G, B = [pixel_value] * 3
+                case _:
+                    exit(f"Error: Unsupported color mode: {resized_image.mode}")
             L = luminance(R, G, B)
             text_file.write(character(L))
         text_file.write("\n")
