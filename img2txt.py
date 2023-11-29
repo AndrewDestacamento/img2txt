@@ -1,29 +1,31 @@
 import sys
-from PIL import Image
 import time
 
+from PIL import Image
+
 # Double the size for detecting a decompression bomb DOS attack
-# Implies the user has a minimum of 0.54GB of RAM
+# Implies the user has a minimum of 0.54GB of RAM in case a large image is used
 Image.MAX_IMAGE_PIXELS = 178_956_971
 
 
 OUTPUT_WIDTH = 300
-CHARACTERS = "@OXoxv;:,. "  # Descending characters, Dark text on light background
-# CHARACTERS = " .,:;vxoXO@" # Ascending characters, Light text on dark background
+CHARACTERS = "@OXoxv;:,. "  # Characters in descending size and density, Dark text on light background
+# CHARACTERS = " .,:;vxoXO@" # Characters in ascending size and density, Light text on dark background
 
 
 def character(percentage):
+    # Acts somewhat like a lookup table, where 0.0 is the first character and 1.0 is the last value
     return CHARACTERS[int(percentage * len(CHARACTERS))]
 
 
 def luminance(r, g, b):
-    # Conversion from standard RGB to to linear RGB
+    # Conversion from 8-bit standard RGB to float linear RGB
     # Repurposed code by Björn Ottosson (https://bottosson.github.io/posts/colorwrong/#what-can-we-do)
     r, g, b = map(
         lambda i: i / 3_294.6 if i < 10.31475 else ((40 * i + 561) / 10_761) ** 2.4,
         [r, g, b],
     )
-    # Conversion from linear RGB to Oklab, just the luminance estimate
+    # Conversion from float linear RGB to float Oklab, just the luminance estimate
     # Oklab by Björn Ottosson (https://bottosson.github.io/posts/oklab/#converting-from-linear-srgb-to-oklab)
     lu = (
         0.2104542553
@@ -38,13 +40,13 @@ def luminance(r, g, b):
 
 with Image.open(sys.argv[1]) as image:
     try:
-        text_file = open(sys.argv[1] + ".txt", "x")
+        text_file = open(f"{sys.argv[1]}.txt", "x")
     except FileExistsError:
         while True:
             overwrite = input("File for output_path already exists. Overwrite? [Y/n]: ")
             match overwrite.lower():
                 case "y":
-                    text_file = open(sys.argv[1] + ".txt", "w")
+                    text_file = open(f"{sys.argv[1]}.txt", "w")
                     break
                 case "n":
                     exit(
@@ -85,5 +87,7 @@ text_file.close()
 elapsed_time = time.time() - start_time
 efficency = image.height * image.width / elapsed_time
 
-print(f"Processing time: {elapsed_time:.4f} at {round(efficency):_} pixels/second")
+print(
+    f"Processing time: {elapsed_time:.4f} seconds at {round(efficency):_} pixels/second"
+)
 print(f"Text written to {sys.argv[1]}.txt")
