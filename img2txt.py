@@ -1,5 +1,10 @@
 import sys
 from PIL import Image
+import time
+
+# Double the size for detecting a decompression bomb DOS attack
+# Implies the user has a minimum of 0.54GB of RAM
+Image.MAX_IMAGE_PIXELS = 178_956_971
 
 
 OUTPUT_WIDTH = 300
@@ -15,7 +20,7 @@ def luminance(r, g, b):
     # Conversion from standard RGB to to linear RGB
     # Repurposed code by Björn Ottosson (https://bottosson.github.io/posts/colorwrong/#what-can-we-do)
     r, g, b = map(
-        lambda i: i / 3294.6 if i < 10.31475 else ((40 * i + 561) / 10761) ** 2.4,
+        lambda i: i / 3_294.6 if i < 10.31475 else ((40 * i + 561) / 10_761) ** 2.4,
         [r, g, b],
     )
     # Conversion from linear RGB to Oklab, just the luminance estimate
@@ -47,8 +52,11 @@ with Image.open(sys.argv[1]) as image:
                     )
                 case _:
                     print(
-                        "Error: Invalid input in overwrite prompt. Repeating overwrite prompt..."
+                        "Invalid input in overwrite prompt. Repeating overwrite prompt..."
                     )
+    print()
+
+    start_time = time.time()
 
     resized_image = image.copy().resize(
         size=(OUTPUT_WIDTH, int(round(OUTPUT_WIDTH / 2 * image.height / image.width))),
@@ -68,11 +76,14 @@ with Image.open(sys.argv[1]) as image:
                 case "L" | "1":
                     R, G, B = [pixel_value] * 3
                 case _:
-                    exit(f"Error: Unsupported color mode: {resized_image.mode}")
-            L = luminance(R, G, B)
-            text_file.write(character(L))
+                    raise TypeError(f"Unsupported color mode {resized_image.mode}")
+            text_file.write(character(luminance(R, G, B)))
         text_file.write("\n")
 
 text_file.close()
 
-print("Text written to " + sys.argv[1] + ".txt")
+elapsed_time = time.time() - start_time
+efficency = image.height * image.width / elapsed_time
+
+print(f"Processing time: {elapsed_time:.4f} at {round(efficency):_} pixels/second")
+print(f"Text written to {sys.argv[1]}.txt")
